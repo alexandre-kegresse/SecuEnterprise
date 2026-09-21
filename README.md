@@ -2,6 +2,8 @@
 
 Documentation de la **Mission 5 — Installation et configuration de l'ELK Stack** du projet SecuEnterprise.
 
+> **Bonus réseau/DNS :** [Consulter la documentation sur la résolution de `kibana.local` et la communication entre les machines](BONUS-DNS-RESEAU.md).
+
 ## Architecture
 
 | Machine | IP | Rôle |
