@@ -38,7 +38,7 @@ Sur le poste Windows utilisé pour les tests, la commande `ping kibana.local` a 
 Ouvrir le fichier :
 
 ```powershell
-notepad C:\Windows\System32\drivers\etc\hosts
+code C:\Windows\System32\drivers\etc\hosts
 ```
 
 Pour accéder à la VM par son interface Host-Only :
