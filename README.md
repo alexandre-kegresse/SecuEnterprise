@@ -11,20 +11,24 @@ Documentation du projet **SecuEnterprise**, incluant les missions 5 et 6 réalis
 | VM-Cible | 192.168.100.10 | Génération des logs |
 | VM-ELK | 192.168.100.30 | Elasticsearch, Logstash, Kibana, TShark |
 
-Réseau Host-Only : `192.168.100.0/24`. Une interface NAT a aussi été utilisée ponctuellement pour l'accès Internet. Les captures NAT affichent les adresses du réseau NAT.
+Réseau Host-Only : `192.168.100.0/24`. Une interface NAT a également été utilisée ponctuellement pour l'accès Internet. Les captures réalisées sur cette interface affichent donc les adresses du réseau NAT et non celles du réseau Host-Only.
 
 # Mission 5 — Installation et configuration de l'ELK Stack
 
-## ELK Stack
+## 1. ELK Stack
 
-- **Elasticsearch** : stockage et recherche des logs, sur `https://127.0.0.1:9200`.
-- **Logstash** : réception et traitement des logs.
-- **Kibana** : visualisation et analyse, accessible sur `http://192.168.100.30:5601`.
-- **Watcher** : détection de conditions et déclenchement d'alertes.
+- **Elasticsearch** : stockage et recherche des logs
+- **Logstash** : réception et traitement des logs
+- **Kibana** : visualisation et analyse
+- **Watcher** : détection de conditions et déclenchement d'alertes
 
-## Logstash
+Elasticsearch fonctionne sur `https://127.0.0.1:9200`.
 
-Configuration : `/etc/logstash/conf.d/enterprise.conf`
+Kibana est accessible sur `http://192.168.100.30:5601`.
+
+## 2. Logstash
+
+Fichier : `/etc/logstash/conf.d/enterprise.conf`
 
 ```conf
 input {
@@ -32,12 +36,14 @@ input {
     port => 5044
     codec => json
   }
+
   udp {
     port => 5514
     type => "syslog"
     ecs_compatibility => "disabled"
   }
 }
+
 output {
   elasticsearch {
     hosts => ["https://127.0.0.1:9200"]
@@ -46,52 +52,88 @@ output {
     password => "TON_MDP"
     ssl_certificate_authorities => ["/etc/logstash/certs/http_ca.crt"]
   }
-  stdout { codec => rubydebug }
+
+  stdout {
+    codec => rubydebug
+  }
 }
 ```
 
-`TON_MDP` est un placeholder : aucun mot de passe réel n'est versionné.
+Le mot de passe réel n'est pas stocké dans GitHub : `TON_MDP` est un placeholder.
 
-Test de configuration et contrôle du service :
+Test de configuration :
 
 ```bash
 su -s /bin/bash logstash -c '/usr/share/logstash/bin/logstash --path.settings /etc/logstash -t'
+```
+
+Résultat : `Configuration OK`.
+
+Puis :
+
+```bash
 systemctl restart logstash
 systemctl status logstash --no-pager
 ```
 
-Résultats observés : `Configuration OK` et service `active (running)`.
+Résultat : service `active (running)`.
 
-## Import des logs
+## 3. Import des logs
 
-La VM-Cible envoie ses logs à Logstash en UDP/5514 :
+La VM-Cible envoie ses logs vers Logstash en UDP sur le port `5514`.
+
+Test :
 
 ```bash
 logger -n 192.168.100.30 -P 5514 -d "TEST LOG FINAL VM-CIBLE"
+```
+
+Les logs sont ensuite stockés dans les index `enterprise-logs-YYYY.MM.dd`.
+
+La réception réseau a été vérifiée avec :
+
+```bash
 tcpdump -ni ens34 udp port 5514
 ```
 
-Chaîne validée : **VM-Cible (192.168.100.10) → UDP/5514 → Logstash (192.168.100.30) → Elasticsearch**. Les événements sont stockés dans `enterprise-logs-YYYY.MM.dd`.
+Chaîne validée :
 
-## Kibana
+```text
+VM-Cible (192.168.100.10)
+        |
+        | UDP 5514
+        v
+Logstash (192.168.100.30)
+        |
+        v
+Elasticsearch
+```
 
-La Data View `enterprise-logs-*` a été créée. Les visualisations réalisées sont :
+## 4. Kibana
+
+Une Data View `enterprise-logs-*` a été créée.
+
+Visualisations réalisées :
 
 - graphique en barres des sources ;
-- graphique temporel basé sur `@timestamp` ;
+- graphique temporel avec `@timestamp` ;
 - graphique circulaire des événements ;
 - tableau avec `event`, `source`, `message` et `@timestamp`.
 
-Elles sont regroupées dans un dashboard Kibana.
+Les visualisations sont regroupées dans un dashboard Kibana.
 
-## Watcher
+## 5. Watcher
 
-Watch : `enterprise-test-alert`.
+Watch configuré : `enterprise-test-alert`.
 
-- Exécution planifiée toutes les 1 minute.
-- Recherche dans `enterprise-logs-*` des messages contenant `TEST` dans les 5 dernières minutes.
-- Condition : `hits.total > 0`.
-- Action : journalisation d'une alerte.
+Paramètres :
+
+- déclenchement toutes les **1 minute** ;
+- recherche dans `enterprise-logs-*` ;
+- recherche des messages contenant `TEST` ;
+- fenêtre temporelle : **5 minutes** ;
+- condition : `hits.total > 0` ;
+- action : journalisation d'une alerte.
 
 Création :
 
@@ -101,50 +143,86 @@ curl -k -u 'elastic:TON_MDP' \
 -H 'Content-Type: application/json' \
 -d '{
   "trigger": {"schedule": {"interval": "1m"}},
-  "input": {"search": {"request": {"indices": ["enterprise-logs-*"], "body": {"query": {"bool": {
-    "must": [{"match": {"message": "TEST"}}],
-    "filter": [{"range": {"@timestamp": {"gte": "now-5m", "lte": "now"}}}]
-  }}}}}},
+  "input": {
+    "search": {
+      "request": {
+        "indices": ["enterprise-logs-*"],
+        "body": {
+          "query": {
+            "bool": {
+              "must": [{"match": {"message": "TEST"}}],
+              "filter": [{"range": {"@timestamp": {"gte": "now-5m", "lte": "now"}}}]
+            }
+          }
+        }
+      }
+    }
+  },
   "condition": {"compare": {"ctx.payload.hits.total": {"gt": 0}}},
-  "actions": {"log_alert": {"logging": {"text": "ALERTE SECURITE : log TEST détecté sur VM-Cible"}}}
+  "actions": {
+    "log_alert": {
+      "logging": {"text": "ALERTE SECURITE : log TEST détecté sur VM-Cible"}
+    }
+  }
 }'
 ```
 
-Vérification et exécution manuelle :
+Vérification :
 
 ```bash
 curl -k -u 'elastic:TON_MDP' 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert?pretty'
+```
+
+Exécution manuelle :
+
+```bash
 curl -k -u 'elastic:TON_MDP' -X POST 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert/_execute?pretty'
 ```
 
-Test émis depuis VM-Cible : `logger -n 192.168.100.30 -P 5514 -d "TEST WATCHER ALERTE VM-CIBLE"`.
+Le test suivant a permis de valider la détection :
 
-Résultat observé : `hits.total = 1`, condition satisfaite et action exécutée.
+```bash
+logger -n 192.168.100.30 -P 5514 -d "TEST WATCHER ALERTE VM-CIBLE"
+```
 
-## Bilan Mission 5
+Résultat : `hits.total = 1`, condition satisfaite et action exécutée.
+
+## 6. Bilan de la Mission 5
 
 | Élément | État |
 |---|---|
-| Elasticsearch, Logstash et Kibana | Configurés et opérationnels |
-| Import des logs et dashboard | Validés |
-| Watcher et test d'alerte | Validés |
+| Elasticsearch | ✅ |
+| Logstash | ✅ |
+| Kibana | ✅ |
+| Import des logs | ✅ |
+| Data View et visualisations | ✅ |
+| Dashboard | ✅ |
+| Watcher et test d'alerte | ✅ |
+
+**Mission 5 — ELK, Logstash, Kibana et Watcher configurés et testés.**
+
+---
 
 # Mission 6 — Capture et analyse réseau avec Wireshark/TShark
 
-## Installation
+## 1. Installation et contrôle de l'outil
 
-TShark, l'outil en ligne de commande de Wireshark, est installé et exécutable sur VM-ELK. Version contrôlée : **4.4.18**.
+TShark (Wireshark en ligne de commande) est installé et exécutable sur VM-ELK. La version affichée lors du contrôle est **4.4.18**.
 
-## Capture Syslog
+## 2. Capture du trafic Syslog
 
-Le trafic VM-Cible → VM-ELK a été capturé avec le filtre `udp port 5514`.
+Le trafic UDP envoyé de VM-Cible vers Logstash a été capturé sur l'interface réseau du laboratoire avec le filtre `udp port 5514`.
+
+Échange observé :
 
 - Source : `192.168.100.10`
 - Destination : `192.168.100.30`
-- Transport : UDP, port destination `5514`
-- Fichier de capture : `/tmp/mission06-syslog.pcapng`
+- Protocole : UDP
+- Port de destination : `5514`
 
-Analyse effectuée :
+La capture a été enregistrée sous `/tmp/mission06-syslog.pcapng`. Une lecture filtrée avec `udp.port == 5514` a permis de retrouver le datagramme.
+
+Commandes d'analyse utilisées :
 
 ```bash
 tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514'
@@ -152,46 +230,60 @@ tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514' -T fields \
   -e frame.number -e ip.src -e ip.dst -e udp.dstport -e data
 ```
 
-## Capture Kibana et analyse HTTP
+## 3. Capture du trafic Kibana
 
-Le trafic TCP/5601 a été capturé sur l'interface NAT dans `/tmp/mission06-kibana.pcapng`. Les conversations affichent des connexions entre le client NAT `192.168.58.1` et Kibana `192.168.58.158:5601`. Ces adresses correspondent au réseau NAT actif pendant la capture, et non au réseau Host-Only.
+Le trafic vers Kibana a été capturé sur l'interface NAT avec le filtre `tcp port 5601`. Le fichier utilisé pour l'analyse est `/tmp/mission06-kibana.pcapng`.
 
-Synthèse des conversations :
+Les conversations TCP indiquent plusieurs connexions du client `192.168.58.1` vers le serveur Kibana `192.168.58.158:5601`. Ce trafic est cohérent avec les requêtes du navigateur lors du chargement de l'interface. Ces adresses sont celles du réseau NAT utilisé pendant cette capture.
+
+Commande de synthèse :
 
 ```bash
 tshark -r /tmp/mission06-kibana.pcapng -q -z conv,tcp
 ```
 
-Le filtre `http.response && http.response.code != 200` a relevé les codes **302, 401, 202, 204, 500 et 503**. Les redirections et réponses 401 doivent être interprétées selon le contexte d'authentification ; les codes 500 et 503 peuvent justifier une vérification applicative, mais ne prouvent pas à eux seuls une attaque.
+## 4. Codes HTTP relevés
+
+Le filtre `http.response && http.response.code != 200` a relevé les réponses **302, 401, 202, 204, 500 et 503**.
+
+Interprétation :
+
+- `302` : redirection, potentiellement normale lors de la navigation ou de l'authentification ;
+- `401` : authentification requise ou refusée ;
+- `202` et `204` : réponses HTTP valides pour certaines opérations ;
+- `500` : erreur interne serveur ;
+- `503` : service temporairement indisponible.
+
+Les codes `500` et `503` justifient une investigation applicative, mais leur présence seule ne prouve pas une attaque. De même, un code `401` n'est pas nécessairement malveillant sans examiner la requête et son contexte.
+
+Commande utilisée :
 
 ```bash
 tshark -r /tmp/mission06-kibana.pcapng \
   -Y 'http.response && http.response.code != 200' \
   -T fields -e frame.number -e ip.src -e ip.dst -e http.response.code
+```
 
+Pour examiner le détail des erreurs :
+
+```bash
 tshark -r /tmp/mission06-kibana.pcapng \
   -Y 'http.response.code == 500 || http.response.code == 503' -V
 ```
 
-## Captures de preuve
-
-Les captures de terminal fournies pour la Mission 6 sont regroupées ci-dessous : capture Syslog, conversations/flux Kibana et résultats d'analyse HTTP.
-
-![Montage des captures Mission 6 : Syslog UDP, échanges TCP Kibana, codes HTTP et preuve de capture](screenshots/mission06-captures.gif)
-
-## Bilan Mission 6
+## 5. Bilan de la Mission 6
 
 | Activité | Résultat |
 |---|---|
-| Installation et contrôle de TShark | Réalisé — version 4.4.18 |
-| Capture Syslog UDP/5514 | Réalisée ; flux VM-Cible → VM-ELK observé |
-| Capture Kibana/TCP 5601 | Réalisée sur l'interface NAT |
-| Analyse des conversations TCP | Réalisée |
+| Installation et exécution de TShark | Réalisé — version 4.4.18 |
+| Capture Syslog UDP/5514 | Réalisée ; échange VM-Cible → VM-ELK observé |
+| Capture du trafic Kibana/TCP 5601 | Réalisée sur l'interface NAT |
+| Synthèse des conversations TCP | Réalisée |
 | Relevé des codes HTTP non-200 | Réalisé |
-| Qualification approfondie des anomalies | À poursuivre : les codes HTTP seuls ne suffisent pas à conclure à une attaque |
+| Investigation approfondie des erreurs et qualification de paquets suspects | À poursuivre : les codes seuls ne permettent pas de conclure à une attaque |
 
-**Conclusion :** les captures et une première analyse TCP/IP et HTTP ont été réalisées. Une conclusion de sécurité définitive nécessite de replacer les réponses atypiques dans le contexte des requêtes et des journaux applicatifs.
+**Conclusion :** les captures et une première analyse des flux TCP/IP et HTTP ont été effectuées. Une conclusion de sécurité définitive nécessiterait de replacer les réponses atypiques dans le contexte des requêtes et des journaux applicatifs.
 
 ---
 
-> Aucun mot de passe réel n'est présent dans ce dépôt. Remplacer `TON_MDP` localement par le secret approprié.
+> Aucun mot de passe réel n'est présent dans ce dépôt. Les chaînes `TON_MDP` sont des placeholders à remplacer localement.
