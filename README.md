@@ -305,21 +305,11 @@ Une visualisation Lens de type **graphique en barres** a été configurée avec 
 - **Axe horizontal :** `@timestamp` ;
 - **Axe vertical :** nombre d'enregistrements ;
 - **Filtre :** `message: *failed*` ;
-- **Période affichée :** les 7 derniers jours, selon la capture.
+- **Période affichée :** les 7 derniers jours, selon la configuration effectuée.
 
 La visualisation a été enregistrée sous le titre **« Mission 07 - Tendance des connexions échouées »**, ajoutée à la bibliothèque et associée au **Dashboard Kibana 1**.
 
-### Captures de preuve
-
-**Visualisation intégrée au dashboard :**
-
-![Dashboard Kibana — tendance des connexions échouées](screenshots/mission07-dashboard.jpg)
-
-**Enregistrement de la visualisation Lens dans le dashboard :**
-
-![Enregistrement Lens — Mission 07](screenshots/mission07-save.jpg)
-
-La capture du dashboard montre une occurrence dans la période affichée. Elle valide l'affichage de la donnée filtrée, mais une tendance statistique fiable nécessiterait un historique plus important et plusieurs événements répartis dans le temps.
+La visualisation a affiché une occurrence dans la période sélectionnée. Cela valide l'affichage de la donnée filtrée, mais une tendance statistique fiable nécessiterait un historique plus important et plusieurs événements répartis dans le temps.
 
 ## 3. Bilan de la Mission 7
 
@@ -328,7 +318,7 @@ La capture du dashboard montre une occurrence dans la période affichée. Elle v
 | Recherche des messages de connexion échouée dans Discover | Réalisée — événement de test retrouvé |
 | Visualisation temporelle Lens | Créée — barres, `@timestamp` et nombre d'enregistrements |
 | Enregistrement et ajout au dashboard | Réalisés — `Dashboard Kibana 1` |
-| Analyse de tendance sur un volume conséquent | À approfondir : la capture montre une seule occurrence |
+| Analyse de tendance sur un volume conséquent | À approfondir : une occurrence observée |
 
 **Conclusion :** la recherche d'un événement `failed` et la visualisation temporelle correspondante sont configurées. Le résultat observé est une preuve fonctionnelle de la chaîne de recherche et de visualisation, et non une conclusion qu'une attaque a eu lieu.
 
