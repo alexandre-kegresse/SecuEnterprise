@@ -1,6 +1,6 @@
 # SecuEnterprise-ELK
 
-Documentation du projet **SecuEnterprise**, incluant les missions 5 et 6 réalisées sur VM-ELK.
+Documentation du projet **SecuEnterprise**, incluant les missions 5, 6 et 7 réalisées sur VM-ELK.
 
 > **Bonus réseau/DNS :** [Documentation sur `kibana.local` et la communication entre les machines](BONUS-DNS-RESEAU.md).
 
@@ -138,9 +138,9 @@ Paramètres :
 Création :
 
 ```bash
-curl -k -u 'elastic:TON_MDP' \
--X PUT 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert' \
--H 'Content-Type: application/json' \
+curl -k -u 'elastic:TON_MDP' \\
+-X PUT 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert' \\
+-H 'Content-Type: application/json' \\
 -d '{
   "trigger": {"schedule": {"interval": "1m"}},
   "input": {
@@ -226,7 +226,7 @@ Commandes d'analyse utilisées :
 
 ```bash
 tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514'
-tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514' -T fields \
+tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514' -T fields \\
   -e frame.number -e ip.src -e ip.dst -e udp.dstport -e data
 ```
 
@@ -259,15 +259,15 @@ Les codes `500` et `503` justifient une investigation applicative, mais leur pr�
 Commande utilisée :
 
 ```bash
-tshark -r /tmp/mission06-kibana.pcapng \
-  -Y 'http.response && http.response.code != 200' \
+tshark -r /tmp/mission06-kibana.pcapng \\
+  -Y 'http.response && http.response.code != 200' \\
   -T fields -e frame.number -e ip.src -e ip.dst -e http.response.code
 ```
 
 Pour examiner le détail des erreurs :
 
 ```bash
-tshark -r /tmp/mission06-kibana.pcapng \
+tshark -r /tmp/mission06-kibana.pcapng \\
   -Y 'http.response.code == 500 || http.response.code == 503' -V
 ```
 
@@ -283,6 +283,54 @@ tshark -r /tmp/mission06-kibana.pcapng \
 | Investigation approfondie des erreurs et qualification de paquets suspects | À poursuivre : les codes seuls ne permettent pas de conclure à une attaque |
 
 **Conclusion :** les captures et une première analyse des flux TCP/IP et HTTP ont été effectuées. Une conclusion de sécurité définitive nécessiterait de replacer les réponses atypiques dans le contexte des requêtes et des journaux applicatifs.
+
+---
+
+# Mission 7 — Tendance des connexions échouées
+
+## 1. Recherche des événements
+
+Dans Kibana Discover, la Data View `enterprise-logs` a été utilisée pour rechercher les messages contenant le terme `failed`, avec la requête KQL :
+
+```kql
+message: *failed*
+```
+
+La recherche a fait apparaître un événement syslog généré sur la VM-Cible : **`SECURITY TEST failed login for user admin from 192.168.100.10`**. Il s'agit d'un événement de test explicitement généré pour valider la recherche ; il ne constitue pas, à lui seul, la preuve d'une tentative malveillante réelle.
+
+## 2. Visualisation temporelle
+
+Une visualisation Lens de type **graphique en barres** a été configurée avec :
+
+- **Axe horizontal :** `@timestamp` ;
+- **Axe vertical :** nombre d'enregistrements ;
+- **Filtre :** `message: *failed*` ;
+- **Période affichée :** les 7 derniers jours, selon la capture.
+
+La visualisation a été enregistrée sous le titre **« Mission 07 - Tendance des connexions échouées »**, ajoutée à la bibliothèque et associée au **Dashboard Kibana 1**.
+
+### Captures de preuve
+
+**Visualisation intégrée au dashboard :**
+
+![Dashboard Kibana — tendance des connexions échouées](screenshots/mission07-dashboard.jpg)
+
+**Enregistrement de la visualisation Lens dans le dashboard :**
+
+![Enregistrement Lens — Mission 07](screenshots/mission07-save.jpg)
+
+La capture du dashboard montre une occurrence dans la période affichée. Elle valide l'affichage de la donnée filtrée, mais une tendance statistique fiable nécessiterait un historique plus important et plusieurs événements répartis dans le temps.
+
+## 3. Bilan de la Mission 7
+
+| Élément | Résultat |
+|---|---|
+| Recherche des messages de connexion échouée dans Discover | Réalisée — événement de test retrouvé |
+| Visualisation temporelle Lens | Créée — barres, `@timestamp` et nombre d'enregistrements |
+| Enregistrement et ajout au dashboard | Réalisés — `Dashboard Kibana 1` |
+| Analyse de tendance sur un volume conséquent | À approfondir : la capture montre une seule occurrence |
+
+**Conclusion :** la recherche d'un événement `failed` et la visualisation temporelle correspondante sont configurées. Le résultat observé est une preuve fonctionnelle de la chaîne de recherche et de visualisation, et non une conclusion qu'une attaque a eu lieu.
 
 ---
 
