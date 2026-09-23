@@ -4,9 +4,7 @@ Documentation du projet **SecuEnterprise**, incluant les missions 5, 6 et 7 réa
 
 > **Bonus réseau/DNS :** [Documentation sur `kibana.local` et la communication entre les machines](BONUS-DNS-RESEAU.md).
 
----
-
-## Architecture du laboratoire
+# Architecture du laboratoire
 
 | Machine | IP Host-Only | Rôle |
 |---|---|---|
@@ -15,14 +13,12 @@ Documentation du projet **SecuEnterprise**, incluant les missions 5, 6 et 7 réa
 
 Réseau Host-Only : `192.168.100.0/24`. Une interface NAT a également été utilisée ponctuellement pour l'accès Internet. Les captures réalisées sur cette interface affichent donc les adresses du réseau NAT et non celles du réseau Host-Only.
 
----
-
 # Mission 5 — Installation et configuration de l'ELK Stack
 
-## 1. ELK Stack — Vue d'ensemble
+## 1. ELK Stack
 
 - **Elasticsearch** : stockage et recherche des logs
-- **Logstash** : réception et traitement des logs  
+- **Logstash** : réception et traitement des logs
 - **Kibana** : visualisation et analyse
 - **Watcher** : détection de conditions et déclenchement d'alertes
 
@@ -30,16 +26,9 @@ Elasticsearch fonctionne sur `https://127.0.0.1:9200`.
 
 Kibana est accessible sur `http://192.168.100.30:5601`.
 
-## 2. Installation et vérification
+## 2. Logstash
 
-Les composants ELK ont été installés et vérifiés sur VM-ELK.
-
-![Installation ELK](images/screenshot_001.png)
-*Interface de configuration initiale*
-
-## 3. Logstash — Configuration
-
-**Fichier :** `/etc/logstash/conf.d/enterprise.conf`
+Fichier : `/etc/logstash/conf.d/enterprise.conf`
 
 ```conf
 input {
@@ -72,7 +61,7 @@ output {
 
 Le mot de passe réel n'est pas stocké dans GitHub : `TON_MDP` est un placeholder.
 
-**Test de configuration :**
+Test de configuration :
 
 ```bash
 su -s /bin/bash logstash -c '/usr/share/logstash/bin/logstash --path.settings /etc/logstash -t'
@@ -80,7 +69,7 @@ su -s /bin/bash logstash -c '/usr/share/logstash/bin/logstash --path.settings /e
 
 Résultat : `Configuration OK`.
 
-**Redémarrage du service :**
+Puis :
 
 ```bash
 systemctl restart logstash
@@ -89,14 +78,11 @@ systemctl status logstash --no-pager
 
 Résultat : service `active (running)`.
 
-![Logstash actif](images/screenshot_005.png)
-*Vérification du statut Logstash*
-
-## 4. Import des logs
+## 3. Import des logs
 
 La VM-Cible envoie ses logs vers Logstash en UDP sur le port `5514`.
 
-**Test initial :**
+Test :
 
 ```bash
 logger -n 192.168.100.30 -P 5514 -d "TEST LOG FINAL VM-CIBLE"
@@ -104,13 +90,13 @@ logger -n 192.168.100.30 -P 5514 -d "TEST LOG FINAL VM-CIBLE"
 
 Les logs sont ensuite stockés dans les index `enterprise-logs-YYYY.MM.dd`.
 
-**Vérification réseau :**
+La réception réseau a été vérifiée avec :
 
 ```bash
 tcpdump -ni ens34 udp port 5514
 ```
 
-**Chaîne validée :**
+Chaîne validée :
 
 ```text
 VM-Cible (192.168.100.10)
@@ -123,72 +109,38 @@ Logstash (192.168.100.30)
 Elasticsearch
 ```
 
-![Flux de logs](images/screenshot_010.png)
-*Chaîne de transmission des logs en UDP*
+## 4. Kibana
 
-## 5. Elasticsearch et indexation
+Une Data View `enterprise-logs-*` a été créée.
 
-Les index Elasticsearch sont créés automatiquement par Logstash lors de la réception des premiers logs.
+Visualisations réalisées :
 
-**Index créés :**
-- `enterprise-logs-2026.09.16`
-- `enterprise-logs-2026.09.17`
-- `enterprise-logs-2026.09.18`
+- graphique en barres des sources ;
+- graphique temporel avec `@timestamp` ;
+- graphique circulaire des événements ;
+- tableau avec `event`, `source`, `message` et `@timestamp`.
 
-(Les dates varient selon la date d'exécution.)
+Les visualisations sont regroupées dans un dashboard Kibana.
 
-![Index Elasticsearch](images/screenshot_020.png)
-*Vue des index créés dans Elasticsearch*
-
-## 6. Kibana — Data View et visualisations
-
-Une Data View `enterprise-logs-*` a été créée dans Kibana.
-
-**Visualisations réalisées :**
-
-### 6.1 Graphique en barres des sources
-
-![Barres par source](images/screenshot_030.png)
-*Distribution des logs par source*
-
-### 6.2 Graphique temporel avec `@timestamp`
-
-![Tendance temporelle](images/screenshot_035.png)
-*Tendance des logs au fil du temps*
-
-### 6.3 Graphique circulaire des événements
-
-![Pie chart événements](images/screenshot_040.png)
-*Répartition des types d'événements*
-
-### 6.4 Tableau de synthèse
-
-![Tableau synthèse](images/screenshot_045.png)
-*Tableau avec event, source, message et @timestamp*
-
-Les visualisations sont regroupées dans un **dashboard Kibana**.
-
-![Dashboard complet](images/screenshot_050.png)
-*Dashboard Kibana 1 — Vue d'ensemble des missions*
-
-## 7. Watcher — Alertes automatisées
+## 5. Watcher
 
 Watch configuré : `enterprise-test-alert`.
 
-**Paramètres :**
-- Déclenchement toutes les **1 minute**
-- Recherche dans `enterprise-logs-*`
-- Recherche des messages contenant `TEST`
-- Fenêtre temporelle : **5 minutes**
-- Condition : `hits.total > 0`
-- Action : journalisation d'une alerte
+Paramètres :
 
-**Création via API :**
+- déclenchement toutes les **1 minute** ;
+- recherche dans `enterprise-logs-*` ;
+- recherche des messages contenant `TEST` ;
+- fenêtre temporelle : **5 minutes** ;
+- condition : `hits.total > 0` ;
+- action : journalisation d'une alerte.
+
+Création :
 
 ```bash
-curl -k -u 'elastic:TON_MDP' \
--X PUT 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert' \
--H 'Content-Type: application/json' \
+curl -k -u 'elastic:TON_MDP' \\
+-X PUT 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert' \\
+-H 'Content-Type: application/json' \\
 -d '{
   "trigger": {"schedule": {"interval": "1m"}},
   "input": {
@@ -215,19 +167,19 @@ curl -k -u 'elastic:TON_MDP' \
 }'
 ```
 
-**Vérification :**
+Vérification :
 
 ```bash
 curl -k -u 'elastic:TON_MDP' 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert?pretty'
 ```
 
-**Exécution manuelle :**
+Exécution manuelle :
 
 ```bash
 curl -k -u 'elastic:TON_MDP' -X POST 'https://127.0.0.1:9200/_watcher/watch/enterprise-test-alert/_execute?pretty'
 ```
 
-**Test de validation :**
+Le test suivant a permis de valider la détection :
 
 ```bash
 logger -n 192.168.100.30 -P 5514 -d "TEST WATCHER ALERTE VM-CIBLE"
@@ -235,13 +187,7 @@ logger -n 192.168.100.30 -P 5514 -d "TEST WATCHER ALERTE VM-CIBLE"
 
 Résultat : `hits.total = 1`, condition satisfaite et action exécutée.
 
-![Watcher configuration](images/screenshot_055.png)
-*Configuration du Watcher dans Kibana*
-
-![Watcher alerte](images/screenshot_060.png)
-*Déclenchement de l'alerte*
-
-## 8. Bilan de la Mission 5
+## 6. Bilan de la Mission 5
 
 | Élément | État |
 |---|---|
@@ -263,91 +209,67 @@ Résultat : `hits.total = 1`, condition satisfaite et action exécutée.
 
 TShark (Wireshark en ligne de commande) est installé et exécutable sur VM-ELK. La version affichée lors du contrôle est **4.4.18**.
 
-```bash
-tshark --version
-```
-
-![TShark version](images/screenshot_070.png)
-*Vérification de la version TShark*
-
-## 2. Capture du trafic Syslog (UDP 5514)
+## 2. Capture du trafic Syslog
 
 Le trafic UDP envoyé de VM-Cible vers Logstash a été capturé sur l'interface réseau du laboratoire avec le filtre `udp port 5514`.
 
-**Échange observé :**
-- Source : `192.168.100.10` (VM-Cible)
-- Destination : `192.168.100.30` (VM-ELK)
+Échange observé :
+
+- Source : `192.168.100.10`
+- Destination : `192.168.100.30`
 - Protocole : UDP
 - Port de destination : `5514`
 
 La capture a été enregistrée sous `/tmp/mission06-syslog.pcapng`. Une lecture filtrée avec `udp.port == 5514` a permis de retrouver le datagramme.
 
-**Commandes d'analyse utilisées :**
+Commandes d'analyse utilisées :
 
 ```bash
 tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514'
-tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514' -T fields \
+tshark -r /tmp/mission06-syslog.pcapng -Y 'udp.port == 5514' -T fields \\
   -e frame.number -e ip.src -e ip.dst -e udp.dstport -e data
 ```
 
-![Capture Syslog](images/screenshot_075.png)
-*Capture du trafic UDP/5514 (Syslog)*
-
-![Analyse Syslog](images/screenshot_080.png)
-*Détail des datagrammes capturés*
-
-## 3. Capture du trafic Kibana (TCP 5601)
+## 3. Capture du trafic Kibana
 
 Le trafic vers Kibana a été capturé sur l'interface NAT avec le filtre `tcp port 5601`. Le fichier utilisé pour l'analyse est `/tmp/mission06-kibana.pcapng`.
 
 Les conversations TCP indiquent plusieurs connexions du client `192.168.58.1` vers le serveur Kibana `192.168.58.158:5601`. Ce trafic est cohérent avec les requêtes du navigateur lors du chargement de l'interface. Ces adresses sont celles du réseau NAT utilisé pendant cette capture.
 
-**Commande de synthèse :**
+Commande de synthèse :
 
 ```bash
 tshark -r /tmp/mission06-kibana.pcapng -q -z conv,tcp
 ```
 
-![Capture Kibana](images/screenshot_085.png)
-*Capture du trafic TCP 5601 (Kibana)*
-
-![Conversations TCP](images/screenshot_090.png)
-*Synthèse des conversations TCP*
-
 ## 4. Codes HTTP relevés
 
 Le filtre `http.response && http.response.code != 200` a relevé les réponses **302, 401, 202, 204, 500 et 503**.
 
-**Interprétation :**
+Interprétation :
 
-- `302` : redirection, potentiellement normale lors de la navigation ou de l'authentification
-- `401` : authentification requise ou refusée
-- `202` et `204` : réponses HTTP valides pour certaines opérations
-- `500` : erreur interne serveur
-- `503` : service temporairement indisponible
+- `302` : redirection, potentiellement normale lors de la navigation ou de l'authentification ;
+- `401` : authentification requise ou refusée ;
+- `202` et `204` : réponses HTTP valides pour certaines opérations ;
+- `500` : erreur interne serveur ;
+- `503` : service temporairement indisponible.
 
 Les codes `500` et `503` justifient une investigation applicative, mais leur présence seule ne prouve pas une attaque. De même, un code `401` n'est pas nécessairement malveillant sans examiner la requête et son contexte.
 
-**Commande utilisée :**
+Commande utilisée :
 
 ```bash
-tshark -r /tmp/mission06-kibana.pcapng \
-  -Y 'http.response && http.response.code != 200' \
+tshark -r /tmp/mission06-kibana.pcapng \\
+  -Y 'http.response && http.response.code != 200' \\
   -T fields -e frame.number -e ip.src -e ip.dst -e http.response.code
 ```
 
-![Codes HTTP](images/screenshot_095.png)
-*Relevé des codes HTTP non-200*
-
-**Pour examiner le détail des erreurs :**
+Pour examiner le détail des erreurs :
 
 ```bash
-tshark -r /tmp/mission06-kibana.pcapng \
+tshark -r /tmp/mission06-kibana.pcapng \\
   -Y 'http.response.code == 500 || http.response.code == 503' -V
 ```
-
-![Détail erreurs](images/screenshot_100.png)
-*Analyse détaillée des erreurs 500/503*
 
 ## 5. Bilan de la Mission 6
 
@@ -366,55 +288,26 @@ tshark -r /tmp/mission06-kibana.pcapng \
 
 # Mission 7 — Tendance des connexions échouées
 
-## 1. Recherche des événements dans Discover
+## 1. Recherche des événements
 
-Dans Kibana Discover, la Data View `enterprise-logs` a été utilisée pour rechercher les messages contenant le terme `failed`.
-
-**Requête KQL :**
+Dans Kibana Discover, la Data View `enterprise-logs` a été utilisée pour rechercher les messages contenant le terme `failed`, avec la requête KQL :
 
 ```kql
 message: *failed*
 ```
 
-La recherche a fait apparaître un événement syslog généré sur la VM-Cible :
+La recherche a fait apparaître un événement syslog généré sur la VM-Cible : **`SECURITY TEST failed login for user admin from 192.168.100.10`**. Il s'agit d'un événement de test explicitement généré pour valider la recherche ; il ne constitue pas, à lui seul, la preuve d'une tentative malveillante réelle.
 
-```
-SECURITY TEST failed login for user admin from 192.168.100.10
-```
-
-Il s'agit d'un événement de test explicitement généré pour valider la recherche ; il ne constitue pas, à lui seul, la preuve d'une tentative malveillante réelle.
-
-![Discover failed](images/screenshot_105.png)
-*Recherche des événements "failed" dans Discover*
-
-![Résultats failed](images/screenshot_110.png)
-*Événement retrouvé : SECURITY TEST failed login*
-
-## 2. Visualisation temporelle avec Lens
+## 2. Visualisation temporelle
 
 Une visualisation Lens de type **graphique en barres** a été configurée avec :
 
-- **Axe horizontal :** `@timestamp`
-- **Axe vertical :** nombre d'enregistrements
-- **Filtre :** `message: *failed*`
-- **Période affichée :** les 7 derniers jours
-
-**Configuration :**
-
-![Config Lens](images/screenshot_115.png)
-*Configuration de la visualisation Lens*
-
-**Résultat du graphique :**
-
-![Graphique tendance](images/screenshot_120.png)
-*Visualisation temporelle — Tendance des connexions échouées*
+- **Axe horizontal :** `@timestamp` ;
+- **Axe vertical :** nombre d'enregistrements ;
+- **Filtre :** `message: *failed*` ;
+- **Période affichée :** les 7 derniers jours, selon la configuration effectuée.
 
 La visualisation a été enregistrée sous le titre **« Mission 07 - Tendance des connexions échouées »**, ajoutée à la bibliothèque et associée au **Dashboard Kibana 1**.
-
-**Intégration au dashboard :**
-
-![Dashboard Mission 7](images/screenshot_125.png)
-*Visualisation Mission 7 ajoutée au Dashboard*
 
 La visualisation a affiché une occurrence dans la période sélectionnée. Cela valide l'affichage de la donnée filtrée, mais une tendance statistique fiable nécessiterait un historique plus important et plusieurs événements répartis dans le temps.
 
@@ -431,25 +324,4 @@ La visualisation a affiché une occurrence dans la période sélectionnée. Cela
 
 ---
 
-# Synthèse générale
-
-## Compétences couverts
-
-✅ Administrer et sécuriser les infrastructures virtualisées  
-✅ Configurer et utiliser une stack complète ELK (Elasticsearch, Logstash, Kibana)  
-✅ Mettre en place des alertes automatisées avec Watcher  
-✅ Capturer et analyser le trafic réseau (UDP, TCP, HTTP)  
-✅ Rechercher et visualiser des patterns dans les logs  
-✅ Créer des tableaux de bord de supervision  
-
-## Points clés validés
-
-- **Chaîne d'ingestion des logs** : VM-Cible → Logstash (UDP/5514) → Elasticsearch
-- **Indexation automatique** : Index créés par pattern `enterprise-logs-YYYY.MM.dd`
-- **Alertes conditionnelles** : Watcher détecte les messages spécifiques et déclenche des actions
-- **Analyse réseau** : Captures TShark filtrées et analysées pour valider les flux
-- **Visualisations interactives** : Dashboards Kibana avec Lens pour l'analyse de tendances
-
----
-
-> **Note :** Aucun mot de passe réel n'est présent dans ce dépôt. Les chaînes `TON_MDP` sont des placeholders à remplacer localement.
+> Aucun mot de passe réel n'est présent dans ce dépôt. Les chaînes `TON_MDP` sont des placeholders à remplacer localement.
