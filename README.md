@@ -1,7 +1,9 @@
 # SecuEnterprise-ELK
 
-Documentation du projet **SecuEnterprise**, incluant les missions 5, 6 et 7 réalisées sur VM-ELK.
+Documentation du projet **SecuEnterprise**, incluant les missions 5, 6, 7 et 8 réalisées sur VM-ELK.
 
+> **Mission 08 :** [Playbooks de réponse à incident](MISSION-08-PLAYBOOKS.md) — intrusion Borg et sabotage Klingon.
+>
 > **Bonus réseau/DNS :** [Documentation sur `kibana.local` et la communication entre les machines](BONUS-DNS-RESEAU.md).
 
 ---
